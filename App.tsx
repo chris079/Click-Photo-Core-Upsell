@@ -8,6 +8,7 @@ import { CheckoutStep } from './components/CheckoutStep';
 import { SuccessStep } from './components/SuccessStep';
 import { AdminPanel } from './components/AdminPanel';
 import { Settings } from 'lucide-react';
+import { recordAbandonment, recordLogin, recordPurchase, sendDownloadEmail } from './services/backendService';
 
 const App: React.FC = () => {
   // Global State
@@ -17,6 +18,7 @@ const App: React.FC = () => {
   
   // Session Data
   const [userEmail, setUserEmail] = useState<string>('');
+  const [currentDriveLink, setCurrentDriveLink] = useState<string | undefined>(undefined);
   const [checkoutTotal, setCheckoutTotal] = useState(0);
   const [checkoutMode, setCheckoutMode] = useState<CheckoutOption>(CheckoutOption.INDIVIDUAL);
   const [selectedCount, setSelectedCount] = useState(0);
@@ -75,22 +77,24 @@ const App: React.FC = () => {
   // Abandoned Cart Logic
   const handleCartUpdate = (itemsCount: number, potentialValue: number, stage: 'Gallery' | 'Checkout') => {
     setCartItemsCount(itemsCount);
-    
+
     // Only track if we have a user email
     if (!userEmail) return;
+
+    const newRecord = {
+      id: `abd_${Date.now()}`,
+      email: userEmail,
+      potentialValue,
+      itemsCount,
+      stage,
+      timestamp: new Date().toISOString()
+    };
+
+    void recordAbandonment(newRecord);
 
     setConfig(prev => {
       // Remove existing abandonment record for this email if exists
       const cleanRecords = prev.analytics.abandonedCheckouts.filter(r => r.email !== userEmail);
-      
-      const newRecord = {
-        id: `abd_${Date.now()}`,
-        email: userEmail,
-        potentialValue,
-        itemsCount,
-        stage,
-        timestamp: new Date().toISOString()
-      };
 
       return {
         ...prev,
@@ -106,6 +110,7 @@ const App: React.FC = () => {
   const handleAuthSuccess = (record: AccessRecord) => {
     setUserEmail(record.email);
     setCurrentPhotos(record.photos || []);
+    setCurrentDriveLink(record.driveLink);
     
     // Handle Discount Timer Logic
     let expiryDate: Date;
@@ -138,6 +143,8 @@ const App: React.FC = () => {
       setIsOfferExpired(false);
     }
 
+    void recordLogin({ email: record.email, codeUsed: record.code });
+
     setCurrentStep('GALLERY');
   };
 
@@ -163,6 +170,13 @@ const App: React.FC = () => {
       timestamp: new Date().toISOString(),
       status: 'Completed' as const
     };
+
+    void recordPurchase(newPurchase);
+    void sendDownloadEmail({
+      email: details.email,
+      downloadUrl: currentDriveLink,
+      selectionSummary: details.description,
+    });
 
     setConfig(prev => ({
       ...prev,
