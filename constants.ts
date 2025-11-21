@@ -2,7 +2,7 @@
 import { AppConfig, Photo } from './types';
 
 // Replace with your actual Stripe Publishable Key (starts with pk_test_ or pk_live_)
-export const STRIPE_PUBLISHABLE_KEY = 'pk_test_TYooMQauvdEDq54NiTphI7jx'; 
+export const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_TYooMQauvdEDq54NiTphI7jx';
 
 // Helper to generate mock photos for default config
 const generateMockPhotos = (): Photo[] => {
