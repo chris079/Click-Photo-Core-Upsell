@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { 
-  Elements, 
-  useStripe, 
-  useElements, 
+import {
+  Elements,
+  useStripe,
+  useElements,
   CardNumberElement, 
   CardExpiryElement, 
   CardCvcElement 
@@ -14,6 +14,7 @@ import { STRIPE_PUBLISHABLE_KEY } from '../constants';
 import { Button } from './Button';
 import { Input } from './Input';
 import { ArrowLeft, CreditCard, ShieldCheck, Lock, AlertTriangle, Check } from 'lucide-react';
+import { createPaymentIntent } from '../services/stripeService';
 
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
@@ -74,11 +75,11 @@ const CheckoutForm: React.FC<{
     setPaymentStage('processing');
 
     try {
-      // Simulate processing
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      setPaymentStage('authorizing');
-      
-      const { error: stripeError } = await stripe.createPaymentMethod({
+      const description = mode === CheckoutOption.ALL
+        ? `Full Set (${selectedCount} Photos)`
+        : `Selected Photos (${selectedCount} Items)`;
+
+      const { error: stripeError, paymentMethod } = await stripe.createPaymentMethod({
         type: 'card',
         card: cardNumber,
         billing_details: {
@@ -87,38 +88,38 @@ const CheckoutForm: React.FC<{
         },
       });
 
-      if (stripeError) throw stripeError;
-      
-      await new Promise(resolve => setTimeout(resolve, 1000)); 
+      if (stripeError || !paymentMethod) {
+        throw stripeError || new Error('Unable to create payment method.');
+      }
+
+      const { clientSecret } = await createPaymentIntent({
+        amount: Math.round(total * 100),
+        currency: 'gbp',
+        description,
+      });
+
+      setPaymentStage('authorizing');
+
+      const confirmation = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: paymentMethod.id,
+      });
+
+      if (confirmation.error) {
+        throw confirmation.error;
+      }
+
       setPaymentStage('success');
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-      const description = mode === CheckoutOption.ALL 
-        ? `Full Set (16 Photos)` 
-        : `Selected Photos (${selectedCount} Items)`;
-
       onSuccess({
         amount: total,
         description,
         email: userEmail
       });
-
     } catch (err: any) {
       console.error("Payment Error:", err);
-      if (err.code === 'resource_missing' || err.type === 'invalid_request_error') {
-        setPaymentStage('success');
-        setTimeout(() => {
-          onSuccess({
-            amount: total,
-            description: mode === CheckoutOption.ALL ? `Full Set (16 Photos)` : `Selected Photos (${selectedCount} Items)`,
-            email: userEmail
-          });
-        }, 1000);
-      } else {
-        setError(err.message || "Payment failed. Please check your details.");
-        setPaymentStage('idle');
-        setIsLoading(false);
-      }
+      setError(err?.message || "Payment failed. Please check your details.");
+      setPaymentStage('idle');
+    } finally {
+      setIsLoading(false);
     }
   };
 

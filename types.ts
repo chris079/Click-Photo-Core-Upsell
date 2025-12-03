@@ -34,6 +34,7 @@ export interface AccessRecord {
   id: string;
   code: string;
   email: string;
+  address: string;
   driveLink?: string; // Optional now
   photos: Photo[];
   firstLoginAt?: string; // ISO String timestamp
