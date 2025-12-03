@@ -3,10 +3,11 @@ import React, { useState, useRef } from 'react';
 import { AppConfig, AccessRecord, Photo, Testimonial } from '../types';
 import { Button } from './Button';
 import { Input } from './Input';
-import { 
-  X, Plus, Trash2, Image as ImageIcon, Upload, 
+import {
+  X, Plus, Trash2, Image as ImageIcon, Upload,
   LayoutDashboard, Users, DollarSign, ShoppingCart, Clock, LogOut, Mail, AlertCircle, Star, CheckCircle
 } from 'lucide-react';
+import { sendInviteEmail } from '../services/emailService';
 
 interface AdminPanelProps {
   config: AppConfig;
@@ -19,9 +20,11 @@ type Tab = 'OVERVIEW' | 'ACCESS' | 'SETTINGS';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose, onUpdate }) => {
   const [activeTab, setActiveTab] = useState<Tab>('OVERVIEW');
-  
+
   const [newRecordCode, setNewRecordCode] = useState('');
   const [newRecordEmail, setNewRecordEmail] = useState('');
+  const [newRecordAddress, setNewRecordAddress] = useState('');
+  const [sendEmailOnCreate, setSendEmailOnCreate] = useState(true);
   // Removed newRecordLink state as it's no longer required
   
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
@@ -56,13 +59,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose,
     }
   };
 
-  const handleAddRecord = () => {
-    if (!newRecordCode || !newRecordEmail) return;
-    
+  const sendInviteForRecord = async (record: AccessRecord) => {
+    setSendingEmailId(record.id);
+    setEmailStatus(null);
+
+    try {
+      await sendInviteEmail({
+        toEmail: record.email,
+        accessCode: record.code,
+        inviteLink: `${window.location.origin}?code=${record.code}`,
+        propertyAddress: record.address
+      });
+      setEmailStatus({ success: true, msg: 'Invite sent!' });
+    } catch (error: any) {
+      console.error('Failed to send email', error);
+      setEmailStatus({ success: false, msg: error?.message || 'Failed to send' });
+    } finally {
+      setTimeout(() => setEmailStatus(null), 3000);
+      setSendingEmailId(null);
+    }
+  };
+
+  const handleAddRecord = async () => {
+    if (!newRecordCode || !newRecordEmail || !newRecordAddress) return;
+
     const newRecord: AccessRecord = {
       id: Date.now().toString(),
       code: newRecordCode,
       email: newRecordEmail,
+      address: newRecordAddress,
       // Drive Link is no longer required
       photos: []
     };
@@ -74,6 +99,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose,
 
     setNewRecordCode('');
     setNewRecordEmail('');
+    setNewRecordAddress('');
+
+    if (sendEmailOnCreate) {
+      await sendInviteForRecord(newRecord);
+    }
   };
 
   const handleDeleteRecord = (id: string) => {
@@ -85,41 +115,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose,
   };
 
   const handleSendInvite = async (record: AccessRecord) => {
-    setSendingEmailId(record.id);
-    setEmailStatus(null);
-
-    // ---------------------------------------------------------
-    // INTEGRATION POINT: CONNECT EMAIL SYSTEM HERE
-    // ---------------------------------------------------------
-    // To connect a real email system (e.g., EmailJS, SendGrid via backend),
-    // replace this setTimeout block with your API call.
-    //
-    // Example with EmailJS:
-    // await emailjs.send('YOUR_SERVICE_ID', 'YOUR_TEMPLATE_ID', {
-    //    to_email: record.email,
-    //    access_code: record.code,
-    //    link: window.location.origin
-    // }, 'YOUR_PUBLIC_KEY');
-    // ---------------------------------------------------------
-
-    try {
-      console.log(`[Mock Email Service] Sending invite to ${record.email} with code ${record.code}`);
-      
-      // Simulating API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Success state
-      setEmailStatus({ success: true, msg: 'Invite sent!' });
-      setTimeout(() => {
-        setSendingEmailId(null);
-        setEmailStatus(null);
-      }, 2000);
-      
-    } catch (error) {
-      console.error("Failed to send email", error);
-      setEmailStatus({ success: false, msg: 'Failed to send' });
-      setTimeout(() => setSendingEmailId(null), 3000);
-    }
+    await sendInviteForRecord(record);
   };
 
   const handleAddTestimonial = () => {
@@ -409,10 +405,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose,
                    <table className="w-full text-left text-sm">
                      <thead className="bg-slate-50 border-b border-slate-200">
                        <tr className="text-slate-500">
-                         <th className="p-4 font-semibold">Code</th>
-                         <th className="p-4 font-semibold">Email</th>
-                         <th className="p-4 font-semibold">Photos</th>
-                         <th className="p-4 font-semibold text-right">Actions</th>
+                       <th className="p-4 font-semibold">Code</th>
+                       <th className="p-4 font-semibold">Email</th>
+                        <th className="p-4 font-semibold">Address</th>
+                       <th className="p-4 font-semibold">Photos</th>
+                       <th className="p-4 font-semibold text-right">Actions</th>
                        </tr>
                      </thead>
                      <tbody className="divide-y divide-slate-100">
@@ -422,9 +419,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose,
                            className={`hover:bg-blue-50 cursor-pointer transition-colors ${selectedRecordId === record.id ? 'bg-blue-50' : 'bg-white'}`}
                            onClick={() => setSelectedRecordId(record.id)}
                          >
-                           <td className="p-4 font-mono font-medium text-slate-900">{record.code}</td>
-                           <td className="p-4 text-slate-600">{record.email}</td>
-                           <td className="p-4">
+                          <td className="p-4 font-mono font-medium text-slate-900">{record.code}</td>
+                          <td className="p-4 text-slate-600">{record.email}</td>
+                          <td className="p-4 text-slate-600">{record.address}</td>
+                          <td className="p-4">
                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${record.photos?.length > 0 ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}`}>
                                {record.photos?.length || 0} items
                              </span>
@@ -457,23 +455,44 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose,
                  <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-4">Add New Client Record</h4>
                    <div className="space-y-4">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <Input
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Input
                           label="Access Code"
                           placeholder="e.g. HOUSE123"
                           value={newRecordCode}
                           onChange={e => setNewRecordCode(e.target.value)}
-                       />
-                       <Input
+                      />
+                      <Input
                           label="Email Address"
                           placeholder="client@example.com"
                           value={newRecordEmail}
                           onChange={e => setNewRecordEmail(e.target.value)}
-                       />
+                      />
+                      <Input
+                          label="Property Address"
+                          placeholder="123 Example Street, City"
+                          value={newRecordAddress}
+                          onChange={e => setNewRecordAddress(e.target.value)}
+                      />
+                    </div>
+                     <div className="flex items-center justify-between gap-3 flex-wrap">
+                       <label className="flex items-center gap-2 text-sm text-slate-600">
+                         <input
+                           type="checkbox"
+                           className="rounded border-slate-300 text-[#0047BB] focus:ring-[#0047BB]"
+                           checked={sendEmailOnCreate}
+                           onChange={(e) => setSendEmailOnCreate(e.target.checked)}
+                         />
+                         Send invite email after creating record
+                       </label>
+                       {emailStatus && (
+                         <span className={`text-sm font-medium ${emailStatus.success ? 'text-green-600' : 'text-red-600'}`}>
+                           {emailStatus.msg}
+                         </span>
+                       )}
                      </div>
-                     {/* Drive Link Input Removed */}
                      <div className="flex justify-end">
-                       <button 
+                       <button
                          onClick={handleAddRecord}
                          className="bg-[#0047BB] text-white px-6 py-3 rounded-md hover:bg-blue-800 transition-colors flex items-center justify-center gap-2 font-medium whitespace-nowrap h-[50px] w-full md:w-auto"
                        >
@@ -489,7 +508,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ config, isOpen, onClose,
                     <>
                       <div className="mb-6 border-b border-slate-100 pb-4">
                         <h4 className="font-bold text-slate-900 text-xl mb-1">{selectedRecord.code}</h4>
-                        <p className="text-sm text-slate-500 mb-2">{selectedRecord.email}</p>
+                        <p className="text-sm text-slate-500 mb-1">{selectedRecord.email}</p>
+                        <p className="text-sm text-slate-600 mb-2">{selectedRecord.address}</p>
                         
                         {selectedRecord.driveLink && (
                           <a href={selectedRecord.driveLink} target="_blank" rel="noreferrer" className="text-xs text-[#0047BB] hover:underline flex items-center gap-1">

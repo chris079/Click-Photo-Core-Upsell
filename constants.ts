@@ -1,8 +1,10 @@
 
 import { AppConfig, Photo } from './types';
 
-// Replace with your actual Stripe Publishable Key (starts with pk_test_ or pk_live_)
-export const STRIPE_PUBLISHABLE_KEY = 'pk_test_TYooMQauvdEDq54NiTphI7jx'; 
+// Prefer environment-supplied Stripe keys so real checkout can be enabled in production
+export const STRIPE_PUBLISHABLE_KEY =
+  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_TYooMQauvdEDq54NiTphI7jx';
+export const STRIPE_SECRET_KEY = import.meta.env.VITE_STRIPE_SECRET_KEY || '';
 
 // Helper to generate mock photos for default config
 const generateMockPhotos = (): Photo[] => {
@@ -67,6 +69,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       id: 'demo-user',
       code: 'DEMO',
       email: 'demo@click.com',
+      address: '123 Demo Street, London',
       // driveLink omitted or can be kept if useful for demo
       photos: defaultPhotos
     },
@@ -74,6 +77,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       id: 'client-2024',
       code: 'HOME2024',
       email: 'client@example.com',
+      address: '456 Client Avenue, Manchester',
       photos: defaultPhotos
     }
   ],
